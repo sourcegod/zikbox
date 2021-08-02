@@ -1,0 +1,27 @@
+    Zikbox changelog
+
+# Last update: Mon, 02/08/2021
+# Version : 0.4
+-- Adding: fluidsynth.py file in the current directory,
+-- changing default soundfont bank name.
+
+# Version: 0.3
+-- Update samedi, 10/09/16 06/38/31
+-- Adding:
+-- Menu Manager object
+
+    
+# Version: 0.2
+-- Update: mercredi, 24/08/16
+-- Adding:
+-- support drumkit set for GM2
+-- support bank_type, bank_select
+-- Update: samedi, 20/08/16
+-- Adding:
+-- Suport keys: Pgup, PgDown, Home, End ...
+
+# Date: vendredi, 19/08/16
+Author:
+Coolbrother
+
+
