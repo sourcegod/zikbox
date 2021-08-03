@@ -11,14 +11,13 @@
 """
 
 import time
-import fluidsynth
-import mido
 import curses
 import os
+import midiman
 
 # print("module path: ", os.path.abspath(fluidsynth.__file__))
 
-# global variables
+# globals variables
 _driver = "alsa"
 _device = "hw:2"
 _bank_file = "/home/com/banks/sf2/fluidr3_gm.sf2"
@@ -220,248 +219,6 @@ class CChannel(object):
         self.lsb_preset =0
 
     #-------------------------------------------
-
-#========================================
-
-class MidiFluid(object):
-    """ fluidsynth manager """
-    def __init__(self):
-        self.fs = None
-        self.sfid = None
-
-    #-----------------------------------------
-    
-    def init(self, filename):
-        """
-        init Fluidsynth
-        from MidiFluid object
-        """
-
-        driver = _driver
-        # device = "hw:1"
-        device = _device
-        self.fs = fluidsynth.Synth(gain=0.5)
-        self.fs.start(driver=driver, device=device)
-        self.sfid = self.fs.sfload(filename, update_midi_preset=0)
-        # chan, sfid, bank, preset
-        # bank select 128 for percussion
-        self.fs.program_select(0, self.sfid, 0, 0)
-        # self.fs.bank_select(0, 128)
-
-    #-----------------------------------------
-
-    def close(self):
-        """ close fluidsynth """
-        self.fs.sfunload(self.sfid, update_midi_preset=0)
-        self.fs.delete()
-
-    #-----------------------------------------
-
-    def play_notes(self):
-        """
-        test for fluidsynth
-        from MidiFluid object
-        """
-
-        self.fs.noteon(0, 60, 100)
-        time.sleep(1.0)
-        self.fs.noteon(0, 67, 100)
-        time.sleep(1.0)
-        self.fs.noteon(0, 76, 100)
-
-        time.sleep(1.0)
-
-        self.fs.noteoff(0, 60)
-        self.fs.noteoff(0, 67)
-        self.fs.noteoff(0, 76)
-
-        time.sleep(1.0)
-
-    #-----------------------------------------
-
-#========================================
-
-class MidiManager(object):
-    """ Midi manager from mido module """
-    def __init__(self):
-        self.synth = MidiFluid()
-        self.chan =0
-        self.vel = 64
-        self.oct =0
-        self.transp =0
-        self.parent = None
-
-    #-----------------------------------------
-
-    def init(self, filename):
-        """
-        init synth 
-        from MidiManager object
-        """
-
-        self.synth.init(filename)
-
-    #-----------------------------------------
-
-    def close(self):
-        self.synth.close()
-
-    def print_ports(self):
-        """
-        print input and output ports through mido driver
-        from MidiManager object
-        """
-
-        print("In ports:")
-        print(mido.get_input_names())
-        print("Out ports:")
-        print(mido.get_output_names())
-
-    #-----------------------------------------
-    def get_in_ports(self):
-        return mido.get_input_names()
-
-    #-----------------------------------------
-
-    def get_out_ports(self):
-        return mido.get_output_names()
-
-    #-----------------------------------------
-
-    def send_to(self, msg, port=0):
-        output_names = mido.get_output_names()
-        port_name = output_names[port]
-        out_port = mido.open_output(port_name)
-        out_port.send(msg)
-
-    #-----------------------------------------
-
-    def get_message_blocking(self, port=0):
-        # Get incoming messages - blocking interface
-        input_names = mido.get_input_names()
-        port_name = input_names[port]
-        in_port = mido.open_input(port_name)
-        for msg in in_port: 
-            print("\a") 
-            print(msg)
-
-    #-----------------------------------------
-
-    def send_message(self, msg):
-        """
-        send message to fluidsynth
-        from MidiManager object
-        """
-        
-        # print("Message in:", msg)
-        type = msg.type
-        bank =0
-        self.max_val = 127
-        fs = self.synth.fs
-        if type in ['note_on', 'note_off']:
-            note = msg.note + (12 * self.oct + self.transp)
-            note = limit_value(note, 0, self.max_val)
-            msg.note = note
-            chan = msg.channel
-            if self.vel != 0:
-                # velocity variation
-                vel = msg.velocity + self.vel
-                vel = limit_value(vel, 0, self.max_val)
-                msg.velocity = vel
-        if type == "note_on":
-            fs.noteon(self.chan, msg.note, msg.velocity)
-        elif type == "note_off":
-            fs.noteoff(self.chan, msg.note)
-        elif type == "program_change":
-            fs.program_change(self.chan, msg.program)
-        elif type == "control_change":
-            fs.cc(self.chan, msg.control, msg.value)
-        elif type == "pitchwheel":
-            fs.pitch_bend(self.chan, msg.pitch)
-        # notify toplevel application
-        if self.parent:
-            self.parent.notify(msg)
-
-    #-----------------------------------------
-
-    def input_callback(self, msg):
-        """
-        incomming messages callback
-        from MidiManager object
-        """
-
-        self.send_message(msg)
-
-    #-----------------------------------------
-
-    def receive_from(self, port=0, callback=None):
-        """
-        Get incoming messages - nonblocking interface
-        with cb_func as callback
-        """
-
-        portname = ""
-        inputnames = mido.get_input_names()
-        try:
-            portname = inputnames[port]
-        except IndexError:
-            print("Error: Midi Port {} is not available".format(port))
-        
-        if portname:
-            inport = mido.open_input(portname)
-            # or we can pass the callback function at the opening port:
-            # in_port = mido.open_input(port_name, callback=cb_func)
-            if callback:
-                inport.callback = callback
-
-        """
-        input_names = mido.get_input_names()
-        port_name = input_names[port]
-        in_port = mido.open_input(port_name)
-        # or we can pass the callback function at the opening port:
-        # in_port = mido.open_input(port_name, callback=cb_func)
-        if callback:
-            in_port.callback = callback
-        """
-
-    #-----------------------------------------
-
-    def program_change(self, chan, program):
-       """
-       set program change
-       from MidiManager object
-       """
-
-       if self.synth:
-           self.synth.fs.program_change(chan, program)
-           # input callback function
-           self.chan = chan
-
-    #-----------------------------------------
-
-    def bank_change(self, chan, bank):
-        """
-        change bank
-        from MidiManager object
-        """
-        
-        if self.synth:
-            self.synth.fs.bank_select(chan, bank)
-
-    #-----------------------------------------
-        
-    def panic(self):
-       """
-       set all notes off controller on al channels
-       from MidiManager object
-       """
-
-       control = 123 # all notes off
-       if self.synth:
-           for chan in range(16):
-            self.synth.fs.cc(chan, control, 0)
-
-    #-----------------------------------------
 
 #========================================
 
@@ -838,8 +595,6 @@ class MidiParams(object):
         self.bank_select_item = None
         self.preset_modified =0
         self.new_patch_lst = list(range(128)) # empty patch
-        self.filename = "/home/com/banks/sf2/fluidr3_gm.sf2"
-        # self.filename = "/home/banks/sf2/drum_loops.sf2"
         self.data_dic = {}
         self.curdata = None
 
@@ -913,7 +668,7 @@ class MidiParams(object):
             ch = CChannel()
             ch.chan = i
             self.channel_lst.append(ch)
-
+        self.chan_item = self.channel_lst[0]
     #-------------------------------------------
 
     def event_change(self, ev_num, ev_lst, step=0, adding=0):
@@ -1016,8 +771,9 @@ class MainApp(object):
         self.bank_select_lst = [0, 128] # bank select allowed
         self.preset_modified =0
         self.new_patch_lst = range(128) # empty patch
-        self.filename = _bank_file
-        # self.filename = "/home/banks/sf2/drum_loops.sf2"
+        self.driver = _driver
+        self.device = _device
+        self.bank_file = _bank_file
 
         self.channelmenu_names = [
                     'Channel',
@@ -1478,9 +1234,9 @@ class MainApp(object):
         # self.set_channels()
         self.midiparams = MidiParams()
         self.midiparams.init()
-        self.midi_man = MidiManager()
+        self.midi_man = midiman.MidiManager()
         self.midi_man.parent = self
-        self.midi_man.init(self.filename)
+        self.midi_man.init(self.driver, self.device, self.bank_file)
         self.midi_man.receive_from(port=1, callback=self.midi_man.input_callback)
 
     #------------------------------------------------------------------------------
