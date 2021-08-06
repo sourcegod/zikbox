@@ -4,19 +4,33 @@
 """
 import sys
 
-cmdDic = {
-        "search", "help", "quit",
-        
-        }
-
 class Commands(object):
-    def __init(self, *args, **kwargs):
-        pass
+    def __init__(self, *args, **kwargs):
+
+        self.cmdDic = {
+                "help": self.help, 
+                "reset": self.reset, 
+                "quit": self.quit,
+                
+                }
+
+
+        self.cmdLst = self.cmdDic.keys()
 
     #------------------------------------------------------------------------------
     
     def search(self, *args, **kwargs):
-        print(f"Searching {args}...")
+        print(f"Searching: ", args)
+        if args is not None: 
+            argLst = args[0].split(' ')
+            func = argLst[0] 
+            if func in self.cmdLst:
+                if len(argLst) == 1:
+                    self.cmdDic[func]()
+                else:
+                    self.cmdDic[func](*argLst[1:])
+            else:
+                print("Command not found.")
 
     #------------------------------------------------------------------------------
     
@@ -25,8 +39,14 @@ class Commands(object):
 
     #------------------------------------------------------------------------------
     
+    def reset(self, *args, **kwargs):
+        print("Reset...: ", args)
+
+    #------------------------------------------------------------------------------
+    
     def quit(self, *args, **kwargs):
         print("Bye!!!")
+        sys.exit(0)
 
     #------------------------------------------------------------------------------
     
@@ -39,9 +59,9 @@ def main():
         # print(val)
         com.search(val)
         
-        if val == "quit":
-            print("Bye!!!")
-            sys.exit(0)
+        if val == "":
+            print("No result")
+            # sys.exit(0)
 
 #------------------------------------------------------------------------------
 
