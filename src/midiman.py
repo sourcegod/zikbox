@@ -1,6 +1,7 @@
 #python
 import fluidsynth
 import mido
+import time
 
 def limit_value(val, min_val=0, max_val=127):
     """ limit value """
@@ -39,11 +40,12 @@ class MidiFluid(object):
         # self.fs.bank_select(0, 128)
 
     #-----------------------------------------
-
+    
     def close(self):
         """ close fluidsynth """
         self.fs.sfunload(self.sfid, update_midi_preset=0)
         self.fs.delete()
+        time.sleep(0.5)
 
     #-----------------------------------------
 
@@ -80,21 +82,57 @@ class MidiManager(object):
         self.oct =0
         self.transp =0
         self.parent = None
+        self.driver = "alsa"
+        self.device = "hw:2"
+        self.bank_file = "/home/com/banks/sf2/fluidr3_gm.sf2"
+
 
     #-----------------------------------------
 
-    def init(self, driver, device, bank_file):
+    def init(self, driver=None, device=None, bank_file=None):
         """
         init synth 
         from MidiManager object
         """
+        if driver is None: driver = self.driver
+        if device is None: device = self.device
+        if bank_file is None: bank_file = self.bank_file
 
         self.synth.init(driver, device, bank_file)
 
     #-----------------------------------------
+    
+    def load(self, chan=0, bank_file=None):
+        """
+        load bank file
+        from MidiManager object
+        """
+
+        chan = int(chan)
+        if chan > 0: chan -= 1
+        if bank_file is None: bank_file = self.bank_file
+        self.synth.sfid = self.synth.fs.sfload(self.bank_file, update_midi_preset=0)
+        # chan, sfid, bank, preset
+        # bank select 128 for percussion
+        self.synth.fs.program_select(chan, self.synth.sfid, 0, 0)
+
+    #-----------------------------------------
+
+    def unload(self):
+        """
+        unload bank file
+        from MidiManager object
+        """
+
+        self.synth.fs.sfunload(self.synth.sfid, update_midi_preset=0)
+
+    #-----------------------------------------
+
 
     def close(self):
         self.synth.close()
+
+    #-----------------------------------------
 
     def print_ports(self):
         """
@@ -209,28 +247,20 @@ class MidiManager(object):
             if callback:
                 inport.callback = callback
 
-        """
-        input_names = mido.get_input_names()
-        port_name = input_names[port]
-        in_port = mido.open_input(port_name)
-        # or we can pass the callback function at the opening port:
-        # in_port = mido.open_input(port_name, callback=cb_func)
-        if callback:
-            in_port.callback = callback
-        """
-
     #-----------------------------------------
 
     def program_change(self, chan, program):
-       """
-       set program change
-       from MidiManager object
-       """
+        """
+        set program change
+        from MidiManager object
+        """
 
-       if self.synth:
-           self.synth.fs.program_change(chan, program)
-           # input callback function
-           self.chan = chan
+        chan = int(chan)
+        if chan > 0: chan -= 1
+        if self.synth:
+            self.synth.fs.program_change(int(chan), int(program))
+            # input callback function
+            self.chan = chan
 
     #-----------------------------------------
 
@@ -239,9 +269,11 @@ class MidiManager(object):
         change bank
         from MidiManager object
         """
-        
+        chan = int(chan)
+        if chan > 0: chan -= 1
+       
         if self.synth:
-            self.synth.fs.bank_select(chan, bank)
+            self.synth.fs.bank_select(int(chan), int(bank))
 
     #-----------------------------------------
         
@@ -257,6 +289,46 @@ class MidiManager(object):
             self.synth.fs.cc(chan, control, 0)
 
     #-----------------------------------------
+   
+    def noteon(self, chan, note, vel):
+       """
+       set note on 
+       from MidiManager object
+       """
+
+       chan = int(chan)
+       if chan > 0: chan -= 1
+       if self.synth:
+            self.synth.fs.noteon(int(chan), int(note), int(vel))
+
+    #-----------------------------------------
+
+    def noteoff(self, chan, note):
+       """
+       set note off
+       from MidiManager object
+       """
+
+       chan = int(chan)
+       if chan > 0: chan -= 1
+       if self.synth:
+            self.synth.fs.noteoff(int(chan), int(note))
+
+    #-----------------------------------------
+
+    def cc(self, chan, ctl, val):
+       """
+       set note control change
+       from MidiManager object
+       """
+
+       chan = int(chan)
+       if chan > 0: chan -= 1
+       if self.synth:
+            self.synth.fs.cc(int(chan), int(ctl), int(val))
+
+    #-----------------------------------------
+
 
 #========================================
 
