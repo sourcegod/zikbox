@@ -27,13 +27,9 @@ class MidiFluid(object):
         from MidiFluid object
         """
 
-        self.driver = driver
-        # device = "hw:1"
-        self.device = device
-        self.bank_file = bank_file
         self.fs = fluidsynth.Synth(gain=0.5)
-        self.fs.start(driver=self.driver, device=self.device)
-        self.sfid = self.fs.sfload(self.bank_file, update_midi_preset=0)
+        self.fs.start(driver=driver, device=device)
+        self.sfid = self.fs.sfload(bank_file, update_midi_preset=0)
         # chan, sfid, bank, preset
         # bank select 128 for percussion
         self.fs.program_select(0, self.sfid, 0, 0)
@@ -48,7 +44,108 @@ class MidiFluid(object):
         time.sleep(0.5)
 
     #-----------------------------------------
+    
+    def system_start(self, driver, device, bank_file):
+        """ 
+        Start the engine
+        from MidiFluid object
+        """
 
+        self.init(driver, device, bank_file)
+
+
+    #-----------------------------------------
+     
+    def system_stop(self):
+        """ 
+        Start the engine
+        from FluidSynth manager
+        """
+
+        self.fs.delete()
+        self.fs = None
+
+    #-----------------------------------------
+
+    def system_panic(self):
+       """
+       set all notes off controller on al channels
+       from FluidSynth object
+       """
+
+       control = 123 # all notes off
+       if self.fs:
+           for chan in range(16):
+                self.fs.cc(chan, control, 0)
+
+    #-----------------------------------------
+    
+    def system_reset(self):
+        """
+        Reset all notes and programs on all channels
+        from FluidSynth object
+        """
+        
+        if self.fs:
+            self.fs.system_reset()
+
+    #------------------------------------------------------------------------------
+    
+    def program_change(self, chan, program):
+        """
+        set program change
+        from FluidSynth  object
+        """
+
+        if self.fs:
+            self.fs.program_change(chan, program)
+
+    #-----------------------------------------
+    
+    def bank_change(self, chan, bank):
+        """
+        change bank
+        from FluidSynth object
+        """
+       
+        if self.fs:
+            self.fs.bank_select(chan, bank)
+
+    #-----------------------------------------
+    
+    def note_on(self, chan, key, vel):
+       """
+       set note on 
+       from FluidSynth object
+       """
+
+       if self.fs:
+            self.fs.noteon(chan, key, vel)
+
+    #-----------------------------------------
+
+    def note_off(self, chan, key):
+       """
+       set note off
+       from FluidSynth object
+       """
+
+       if self.fs:
+            self.fs.noteoff(chan, key)
+
+    #-----------------------------------------
+
+    def control_change(self, chan, ctrl, val):
+       """
+       set control change
+       from FluidSynth object
+       """
+
+       if self.fs:
+            self.fs.cc(chan, ctrl, val)
+
+    #-----------------------------------------
+  
     def play_notes(self):
         """
         test for fluidsynth
@@ -85,6 +182,9 @@ class MidiManager(object):
         self.driver = "alsa"
         self.device = "hw:2"
         self.bank_file = "/home/com/banks/sf2/fluidr3_gm.sf2"
+        self._bpm =100
+        self._tempo = 60 / self._bpm # time in sec
+
 
 
     #-----------------------------------------
@@ -102,7 +202,7 @@ class MidiManager(object):
 
     #-----------------------------------------
     
-    def load(self, chan=0, bank_file=None):
+    def load(self, chan=0, bank_file=None, *args, **kwargs):
         """
         load bank file
         from MidiManager object
@@ -118,7 +218,7 @@ class MidiManager(object):
 
     #-----------------------------------------
 
-    def unload(self):
+    def unload(self, *args, **kwargs):
         """
         unload bank file
         from MidiManager object
@@ -134,6 +234,34 @@ class MidiManager(object):
 
     #-----------------------------------------
 
+    def startsys(self, driver=None, device=None, bank_file=None, *args, **kwargs):
+        """ 
+        Start the engine
+        from Midimanager object
+        """
+
+        if driver is None: driver = self.driver
+        if device is None: device = self.device
+        if bank_file is None: bank_file = self.bank_file
+        if self.synth is None:
+            self.synth = MidiFluid()
+        if self.synth:
+            self.synth.system_start(driver, device, bank_file)
+
+    #-----------------------------------------
+     
+    def stopsys(self, *args, **kwargs):
+        """ 
+        Stop the engine
+        from Midi manager object
+        """
+
+        if self.synth:
+            self.synth.system_stop()
+            self.synth = None
+
+    #-----------------------------------------
+        
     def print_ports(self):
         """
         print input and output ports through mido driver
@@ -251,6 +379,7 @@ class MidiManager(object):
 
     def program_change(self, chan, program):
         """
+        Deprecated
         set program change
         from MidiManager object
         """
@@ -263,9 +392,21 @@ class MidiManager(object):
             self.chan = chan
 
     #-----------------------------------------
+    
+    def prog(self, chan=1, prg=0, *args, **kwargs):
+        print("prog: ", chan, ":", prg)
+        chan = int(chan)
+        if chan > 0: chan -= 1
+        if self.synth:
+            self.synth.program_change(int(chan), int(prg))
+            # input callback function
+            self.chan = chan
+
+    #------------------------------------------------------------------------------
 
     def bank_change(self, chan, bank):
         """
+        Deprecated
         change bank
         from MidiManager object
         """
@@ -277,20 +418,20 @@ class MidiManager(object):
 
     #-----------------------------------------
         
-    def panic(self):
-       """
-       set all notes off controller on al channels
-       from MidiManager object
-       """
-
-       control = 123 # all notes off
-       if self.synth:
-           for chan in range(16):
-            self.synth.fs.cc(chan, control, 0)
+    def bank(self, chan=1, bnk=0, *args, **kwargs):
+        """
+        change bank
+        from MidiManager object
+        """
+        chan = int(chan)
+        if chan > 0: chan -= 1
+       
+        if self.synth:
+            self.synth.bank_change(int(chan), int(bnk))
 
     #-----------------------------------------
-   
-    def noteon(self, chan, note, vel):
+     
+    def noteon(self, chan=1, key=60, vel=100, *args, **kwargs):
        """
        set note on 
        from MidiManager object
@@ -299,11 +440,11 @@ class MidiManager(object):
        chan = int(chan)
        if chan > 0: chan -= 1
        if self.synth:
-            self.synth.fs.noteon(int(chan), int(note), int(vel))
+            self.synth.note_on(int(chan), int(key), int(vel))
 
     #-----------------------------------------
 
-    def noteoff(self, chan, note):
+    def noteoff(self, chan=1, key=60, *args, **kwargs):
        """
        set note off
        from MidiManager object
@@ -312,11 +453,27 @@ class MidiManager(object):
        chan = int(chan)
        if chan > 0: chan -= 1
        if self.synth:
-            self.synth.fs.noteoff(int(chan), int(note))
+            self.synth.note_off(int(chan), int(key))
+
+    #-----------------------------------------
+    
+    def note(self, chan=1, key=60, vel=100, dur=1, *args, **kwargs):
+       """
+       set note with duration
+       from MidiManager object
+       """
+
+       chan = int(chan)
+       if chan > 0: chan -= 1
+       if self.synth:
+            self.noteon(int(chan), int(key), int(vel))
+            time.sleep(self._tempo * float(dur))
+            self.noteoff(int(chan), int(key))
 
     #-----------------------------------------
 
-    def cc(self, chan, ctl, val):
+
+    def cc(self, chan=1, ctrl=7, val=100, *args, **kwargs):
        """
        set note control change
        from MidiManager object
@@ -325,10 +482,57 @@ class MidiManager(object):
        chan = int(chan)
        if chan > 0: chan -= 1
        if self.synth:
-            self.synth.fs.cc(int(chan), int(ctl), int(val))
+            self.synth.control_change(int(chan), int(ctrl), int(val))
+
+    #-----------------------------------------
+    
+    def panic(self, *args, **kwargs):
+       """
+       set all notes off controller on al channels
+       from MidiManager object
+       """
+       
+       if self.synth:
+           self.synth.system_panic()
+
+    #-----------------------------------------
+    
+    def reset(self, *args, **kwargs):
+        """
+        Reset all notes off and programs on al channels
+        from MidiManager object
+        """
+
+        if self.synth:
+            self.synth.system_reset()
+
+    #------------------------------------------------------------------------------
+   
+    def bpm(self, val=100, *args, **kwargs):
+        """
+        set the bpm
+        from MidiManager object
+        """
+        
+        self._bpm = float(val)
+        self._tempo = 60 / self._bpm
 
     #-----------------------------------------
 
+    def test(self, *args, **kwargs):
+        """
+        Test the app
+        from MidiManager object
+        """
+       
+        self.prog(chan=1, prg=16)
+        for key in [60, 64, 67]:
+            self.note(chan=1, key=key)
+        self.note(key=72,  dur=4)
+
+    #-----------------------------------------
 
 #========================================
 
+if __name__ == "__main__":
+    input("Test...")

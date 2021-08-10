@@ -13,17 +13,27 @@ session = PromptSession(history = FileHistory(expanduser('~/.synth_history')))
 class Commands(object):
     def __init__(self, *args, **kwargs):
 
+        self.midman = midiman.MidiManager()
+        self.midman.parent = self
         self.cmdDic = {
                 "help": self.help, 
                 "quit": self.quit,
                 "q": self.quit,
-                "prog": self.prog,
-                "bank": self.bank,
-                "panic": self.panic, 
-                "reset": self.reset, 
-                "noteon": self.noteon,
-                "noteoff": self.noteoff,
-                "cc": self.cc,
+                "prog": self.midman.prog,
+                "bank": self.midman.bank,
+                "panic": self.midman.panic, 
+                "reset": self.midman.reset, 
+                
+                "bpm": self.midman.bpm,
+                "noteon": self.midman.noteon,
+                "noteoff": self.midman.noteoff,
+                "note": self.midman.note,
+                "cc": self.midman.cc,
+                "load": self.midman.load,
+                "unload": self.midman.unload,
+                "test": self.midman.test,
+                "startsys": self.midman.startsys,
+                "stopsys": self.midman.stopsys,
                 
                 }
 
@@ -33,8 +43,7 @@ class Commands(object):
     #------------------------------------------------------------------------------
     
     def init(self):   
-        self.midman = midiman.MidiManager()
-        self.midman.parent = self
+        # self.midman = midiman.MidiManager()
         self.midman.init(driver=None, device=None, bank_file=None)
         self.midman.receive_from(port=1, callback=self.midman.input_callback)
 
@@ -76,44 +85,6 @@ class Commands(object):
 
     #------------------------------------------------------------------------------
     
-    def prog(self, chan, prg, *args, **kwargs):
-        print("prog: ", chan, ":", prg)
-        self.midman.program_change(chan, prg)
-
-    #------------------------------------------------------------------------------
-
-    def bank(self, chan, bnk, *args, **kwargs):
-        self.midman.bank_change(chan, bnk)
-
-    #------------------------------------------------------------------------------
-
-    def panic(self, *args, **kwargs):
-        self.midman.panic()
-
-    #------------------------------------------------------------------------------
-
-    def reset(self, *args, **kwargs):
-        self.midman.panic()
-        print("Reset...: ", args)
-
-    #------------------------------------------------------------------------------
-    
-    def noteon(self, chan=1, note=60, vel=100, *args, **kwargs):
-        self.midman.noteon(chan, note, vel)
-
-    #------------------------------------------------------------------------------
- 
-    def noteoff(self, chan=1, note=60, *args, **kwargs):
-        self.midman.noteoff(chan, note)
-
-    #------------------------------------------------------------------------------
-    
-    def cc(self, chan=1, ctl=7, val=100, *args, **kwargs):
-        print("ctl: ", repr(ctl), repr(val))
-        self.midman.cc(chan, ctl, val)
-
-    #------------------------------------------------------------------------------
-  
 #========================================
 
 def main():
