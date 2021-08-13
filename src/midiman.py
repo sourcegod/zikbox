@@ -1,17 +1,8 @@
-#python
+#! /usr/bin/python3
+import utils
 import fluidsynth
 import mido
 import time
-
-def limit_value(val, min_val=0, max_val=127):
-    """ limit value """
-    
-    if val < min_val: val = min_val
-    elif val > max_val: val = max_val
-    
-    return val
-
-#-------------------------------------------
 
 class MidiFluid(object):
     """ fluidsynth manager """
@@ -44,6 +35,32 @@ class MidiFluid(object):
         time.sleep(0.5)
 
     #-----------------------------------------
+
+    def load(self, chan, bank_file, *args, **kwargs):
+        """
+        load bank file
+        from MidiMFluid object
+        """
+
+        if self.fs:
+            self.sfid = self.fs.sfload(bank_file, update_midi_preset=0)
+            # chan, sfid, bank, preset
+            # bank select 128 for percussion
+            self.fs.program_select(chan, self.sfid, 0, 0)
+
+    #-----------------------------------------
+
+    def unload(self, *args, **kwargs):
+        """
+        unload bank file
+        from MidiFluid object
+        """
+        
+        if self.fs:
+            self.fs.sfunload(self.sfid, update_midi_preset=0)
+
+    #-----------------------------------------
+
     
     def system_start(self, driver, device, bank_file):
         """ 
@@ -202,19 +219,26 @@ class MidiManager(object):
 
     #-----------------------------------------
     
-    def load(self, chan=0, bank_file=None, *args, **kwargs):
+    def close(self):
+        """ 
+        close the synth
+        from MidiManager object
+        """
+
+        if self.synth:
+            self.synth.close()
+
+    #-----------------------------------------
+
+    def load(self, bank_file=None, chan=1, *args, **kwargs):
         """
         load bank file
         from MidiManager object
         """
 
-        chan = int(chan)
-        if chan > 0: chan -= 1
         if bank_file is None: bank_file = self.bank_file
-        self.synth.sfid = self.synth.fs.sfload(self.bank_file, update_midi_preset=0)
-        # chan, sfid, bank, preset
-        # bank select 128 for percussion
-        self.synth.fs.program_select(chan, self.synth.sfid, 0, 0)
+        if self.synth:
+            self.synth.load(chan, bank_file)
 
     #-----------------------------------------
 
@@ -223,14 +247,9 @@ class MidiManager(object):
         unload bank file
         from MidiManager object
         """
-
-        self.synth.fs.sfunload(self.synth.sfid, update_midi_preset=0)
-
-    #-----------------------------------------
-
-
-    def close(self):
-        self.synth.close()
+        
+        if self.synth:
+            self.synth.unload()
 
     #-----------------------------------------
 
@@ -318,13 +337,13 @@ class MidiManager(object):
         if type in ['note_on', 'note_off']:
             m_vel = msg.velocity
             note = msg.note + (12 * self.oct + self.transp)
-            note = limit_value(note, 0, self.max_val)
+            note = utils.limit_value(note, 0, self.max_val)
             msg.note = note
             self.chan = msg.channel
             if self.vel != 0:
                 # velocity variation
                 vel = msg.velocity + self.vel
-                vel = limit_value(vel, 0, self.max_val)
+                vel = utils.limit_value(vel, 0, self.max_val)
                 msg.velocity = vel
         if type == "note_on" and m_vel >0:
             fs.noteon(self.chan, msg.note, msg.velocity)
@@ -377,48 +396,20 @@ class MidiManager(object):
 
     #-----------------------------------------
 
-    def program_change(self, chan, program):
+    def prog(self, _prog=0, chan=1, *args, **kwargs):
         """
-        Deprecated
         set program change
         from MidiManager object
         """
 
-        chan = int(chan)
-        if chan > 0: chan -= 1
         if self.synth:
-            self.synth.fs.program_change(int(chan), int(program))
-            # input callback function
-            self.chan = chan
-
-    #-----------------------------------------
-    
-    def prog(self, chan=1, prg=0, *args, **kwargs):
-        print("prog: ", chan, ":", prg)
-        chan = int(chan)
-        if chan > 0: chan -= 1
-        if self.synth:
-            self.synth.program_change(int(chan), int(prg))
-            # input callback function
-            self.chan = chan
+            self.synth.program_change(chan, _prog)
+            self._chan = chan
+        print(f"prog: {_prog}, chan: {chan}")
 
     #------------------------------------------------------------------------------
-
-    def bank_change(self, chan, bank):
-        """
-        Deprecated
-        change bank
-        from MidiManager object
-        """
-        chan = int(chan)
-        if chan > 0: chan -= 1
        
-        if self.synth:
-            self.synth.fs.bank_select(int(chan), int(bank))
-
-    #-----------------------------------------
-        
-    def bank(self, chan=1, bnk=0, *args, **kwargs):
+    def bank(self, chan=1, _bank=0, *args, **kwargs):
         """
         change bank
         from MidiManager object
@@ -427,62 +418,54 @@ class MidiManager(object):
         if chan > 0: chan -= 1
        
         if self.synth:
-            self.synth.bank_change(int(chan), int(bnk))
+            self.synth.bank_change(int(chan), int(_bank))
 
     #-----------------------------------------
      
-    def noteon(self, chan=1, key=60, vel=100, *args, **kwargs):
+    def noteon(self, key=60, vel=100, chan=1, *args, **kwargs):
        """
        set note on 
        from MidiManager object
        """
 
-       chan = int(chan)
-       if chan > 0: chan -= 1
        if self.synth:
-            self.synth.note_on(int(chan), int(key), int(vel))
+            self.synth.note_on(chan, key, vel)
 
     #-----------------------------------------
 
-    def noteoff(self, chan=1, key=60, *args, **kwargs):
+    def noteoff(self, key=60, chan=1, *args, **kwargs):
        """
        set note off
        from MidiManager object
        """
 
-       chan = int(chan)
-       if chan > 0: chan -= 1
        if self.synth:
-            self.synth.note_off(int(chan), int(key))
+            self.synth.note_off(chan, key)
 
     #-----------------------------------------
     
-    def note(self, chan=1, key=60, vel=100, dur=1, *args, **kwargs):
-       """
-       set note with duration
-       from MidiManager object
-       """
-
-       chan = int(chan)
-       if chan > 0: chan -= 1
-       if self.synth:
-            self.noteon(int(chan), int(key), int(vel))
+    def note(self, key=60, vel=100, dur=1, chan=1, *args, **kwargs):
+        """
+        set note with duration
+        from MidiManager object
+        """
+        print("key: ", repr(key))
+        if self.synth:
+            self.noteon(key, vel, chan)
             time.sleep(self._tempo * float(dur))
-            self.noteoff(int(chan), int(key))
+            self.noteoff(key, chan)
 
     #-----------------------------------------
 
 
-    def cc(self, chan=1, ctrl=7, val=100, *args, **kwargs):
+    def cc(self, ctrl=7, val=100, chan=1, *args, **kwargs):
        """
        set note control change
        from MidiManager object
        """
 
-       chan = int(chan)
-       if chan > 0: chan -= 1
        if self.synth:
-            self.synth.control_change(int(chan), int(ctrl), int(val))
+            self.synth.control_change(chan, ctrl, val)
 
     #-----------------------------------------
     
@@ -514,21 +497,23 @@ class MidiManager(object):
         from MidiManager object
         """
         
-        self._bpm = float(val)
-        self._tempo = 60 / self._bpm
+        if self.synth:
+            if self._bpm >0: # to avoid ZeroDivisionError :-)
+                self._bpm = float(val)
+                self._tempo = 60 / self._bpm
 
     #-----------------------------------------
 
-    def test(self, *args, **kwargs):
+    def test(self, _prog=16, chan=1, *args, **kwargs):
         """
         Test the app
         from MidiManager object
         """
        
-        self.prog(chan=1, prg=16)
+        self.prog(_prog=_prog, chan=chan)
         for key in [60, 64, 67]:
-            self.note(chan=1, key=key)
-        self.note(key=72,  dur=4)
+            self.note(key=key, chan=chan)
+        self.note(key=72,  dur=4, chan=chan)
 
     #-----------------------------------------
 

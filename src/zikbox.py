@@ -1101,7 +1101,7 @@ class MainApp(object):
             params.channel_num = chan_num
             params.patch_num = patch_num
             self.midi_man.chan = chan_num
-            self.midi_man.program_change(chan_num, patch_num)
+            self.midi_man.prog(chan=chan_num, _prog=patch_num)
         else:
             self.beep()
         msg = "Channel : {}".format(params.channel_num+1)
@@ -1195,12 +1195,12 @@ class MainApp(object):
             if params.preset_modified and\
                 params.bank_select_num in params.bank_select_lst:
                 # change bank number before sending patch
-                self.midi_man.bank_change(chan_num, self.bank_select_num)
+                self.midi_man.bank(chan=chan_num, _bank=self.bank_select_num)
                 params.preset_modified =0
         else: # no patch_item
             self.beep()
         
-        self.midi_man.program_change(chan_num, patch_num)
+        self.midi_man.prog(chan=chan_num, _prog=patch_num)
         msg = "{} - {}".format(patch_num, params.patch_item)
         self.display(msg)
 
