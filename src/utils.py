@@ -26,7 +26,8 @@ def limit_value(val, min_val=0, max_val=127):
 #-------------------------------------------
 
 def is_int(val):
-    return val % 1 == 0
+    # return val % 1 == 0
+    return float(val).is_integer()
 
 #-------------------------------------------
 

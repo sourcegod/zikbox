@@ -197,7 +197,7 @@ class MidiManager(object):
         self.transp =0
         self.parent = None
         self.driver = "alsa"
-        self.device = "hw:2"
+        self.device = "hw:1"
         self.bank_file = "/home/com/banks/sf2/fluidr3_gm.sf2"
         self._bpm =100
         self._tempo = 60 / self._bpm # time in sec
@@ -238,7 +238,7 @@ class MidiManager(object):
 
         if bank_file is None: bank_file = self.bank_file
         if self.synth:
-            self.synth.load(chan, bank_file)
+            self.synth.load(int(chan), str(bank_file))
 
     #-----------------------------------------
 
@@ -402,6 +402,8 @@ class MidiManager(object):
         from MidiManager object
         """
 
+        chan = int(chan)
+        _prog = int(_prog)
         if self.synth:
             self.synth.program_change(chan, _prog)
             self._chan = chan
@@ -414,32 +416,39 @@ class MidiManager(object):
         change bank
         from MidiManager object
         """
+
         chan = int(chan)
-        if chan > 0: chan -= 1
-       
+        _bank = int(_bank)
         if self.synth:
-            self.synth.bank_change(int(chan), int(_bank))
+            self.synth.bank_change(chan, _bank)
 
     #-----------------------------------------
      
     def noteon(self, key=60, vel=100, chan=1, *args, **kwargs):
-       """
-       set note on 
-       from MidiManager object
-       """
+        """
+        set note on 
+        from MidiManager object
+        """
 
-       if self.synth:
+        chan = int(chan)
+        key = int(key)
+        vel = int(vel)
+
+        if self.synth:
             self.synth.note_on(chan, key, vel)
 
     #-----------------------------------------
 
     def noteoff(self, key=60, chan=1, *args, **kwargs):
-       """
-       set note off
-       from MidiManager object
-       """
+        """
+        set note off
+        from MidiManager object
+        """
 
-       if self.synth:
+        chan = int(chan)
+        key = int(key)
+
+        if self.synth:
             self.synth.note_off(chan, key)
 
     #-----------------------------------------
@@ -450,21 +459,26 @@ class MidiManager(object):
         from MidiManager object
         """
         print("key: ", repr(key))
+        dur = float(dur)
         if self.synth:
             self.noteon(key, vel, chan)
-            time.sleep(self._tempo * float(dur))
+            time.sleep(self._tempo * dur)
             self.noteoff(key, chan)
 
     #-----------------------------------------
 
 
     def cc(self, ctrl=7, val=100, chan=1, *args, **kwargs):
-       """
-       set note control change
-       from MidiManager object
-       """
+        """
+        set note control change
+        from MidiManager object
+        """
+        
+        chan = int(chan)
+        ctrl = int(ctrl)
+        val = int(val)
 
-       if self.synth:
+        if self.synth:
             self.synth.control_change(chan, ctrl, val)
 
     #-----------------------------------------
@@ -491,20 +505,21 @@ class MidiManager(object):
 
     #------------------------------------------------------------------------------
    
-    def bpm(self, val=100, *args, **kwargs):
+    def bpm(self, _bpm=100, *args, **kwargs):
         """
         set the bpm
         from MidiManager object
         """
         
+        _bpm = float(_bpm)
         if self.synth:
-            if self._bpm >0: # to avoid ZeroDivisionError :-)
-                self._bpm = float(val)
-                self._tempo = 60 / self._bpm
+            if _bpm >0: # to avoid ZeroDivisionError :-)
+                self._tempo = 60 / _bpm
+                self._bpm = _bpm
 
     #-----------------------------------------
 
-    def test(self, _prog=16, chan=1, *args, **kwargs):
+    def demo(self, _prog=16, chan=1, *args, **kwargs):
         """
         Test the app
         from MidiManager object

@@ -9,16 +9,11 @@ from prompt_toolkit import prompt, PromptSession
 from prompt_toolkit.history import FileHistory
 from os.path import expanduser
 
-session = PromptSession(history = FileHistory(expanduser('~/.synth_history')))
-def parseString(_str):
-    """ 
-    Warn: Inused
-    Parse string and returns: list 
-    """
-    # Remove all spaces from string
-    return _str.lower().split()
-    
-#------------------------------------------------------------------------------
+# globals variables
+_DEBUG =0
+_TRACING =0
+
+_session = PromptSession(history = FileHistory(expanduser('~/.synth_history')))
 
 class Commands(object):
     def __init__(self, *args, **kwargs):
@@ -26,10 +21,10 @@ class Commands(object):
         self.midman = midiman.MidiManager()
         self.midman.parent = self
         
-        self._midiParamNames = (
+        self._midiParamLst = [
                 "chan", "key", "vel", 
                 "_bank", "_prog", "val", "ctrl",
-                )
+                ]
 
         self._progDic = {
                 "_prog": 0, "chan": 1
@@ -54,33 +49,49 @@ class Commands(object):
                 "key": 60, "vel": 100, "dur": 1, "chan": 1
                 }
 
-        self.cmdDic = {
-                "help": (self.help,  {}),
-                "quit": (self.quit, {}),
-                "q": (self.quit, {}),
-                "prog": (self.midman.prog, self._progDic),
-                "bank": (self.midman.bank, self._bankDic),
-                "cc": (self.midman.cc, self._ccDic),
-                "panic": (self.midman.panic,  {}),
-                "reset": (self.midman.reset,  {}),
-                
-                "noteon": (self.midman.noteon, self._noteonDic),
-                "noteoff": (self.midman.noteoff, self._noteoffDic),
-                "note": (self.midman.note, self._noteDic),
-                "bpm": (self.midman.bpm, {"val": 100}),
-                "load": (self.midman.load, {"bankFile": None, "chan": 1}),
-                "unload": (self.midman.unload, {}),
-                "test": (self.midman.test, {"_prog": 16, "chan": 1}),
-                "startsys": (self.midman.startsys, {}),
-                "stopsys": (self.midman.stopsys, {}),
+        self._helpDic = {
+                "all": "Print all available helps",
+                "help": "print this help",
+                "test": "print about test command",
+                "trace": "print about trace command",
+                "quit": "Close the system",
+                "about": "Zikbox Music System - Version 0.1",
+                }
+
+        self.globComDic = {
+                "help": {"func": self.help, "help": "Short help on help", "all": self._helpDic["all"]},
+                "quit": {"func": self.quit, },
+                "q": {"func": self.quit, },
+                "test": {"func": self.test, "_prog": 33, "chan": 1, },
+                "trace": {"func": self.trace, },
                 
                 }
 
-
-        self.cmdLst = self.cmdDic.keys()
+       
+        
+        self._synthComDic = {
+                "prog": {"func": self.midman.prog, **self._progDic}, 
+                "bank": {"func": self.midman.bank, **self._bankDic},
+                "cc": {"func": self.midman.cc, **self._ccDic},
+                "panic": {"func": self.midman.panic,  },
+                "reset": {"func": self.midman.reset,  },
+                
+                "noteon": {"func": self.midman.noteon, **self._noteonDic, },
+                "noteoff": {"func": self.midman.noteoff, **self._noteoffDic, },
+                "note": {"func": self.midman.note, **self._noteDic, },
+                "bpm": {"func": self.midman.bpm, "val": 100, },
+                "load": {"func": self.midman.load, "bankFile": None, "chan": 1, },
+                "unload": {"func": self.midman.unload, },
+                "demo": {"func": self.midman.demo, "_prog": 16, "chan": 1},
+                "startsys": {"func": self.midman.startsys, "driver": None, "device": None, "bank_file": None, },
+                "stopsys": {"func": self.midman.stopsys, },
+                
+                }
+        
         self._midiFuncLst = ["prog", "bank", "cc",
                 "noteon", "noteoff", "note", 
-                "bpm", "load", "unload", "test",
+                "bpm", "load", "unload", "demo",
+                # "test",
                 ]
 
     #------------------------------------------------------------------------------
@@ -99,21 +110,66 @@ class Commands(object):
 
     def makeDicParams(self, *args, **kwargs):
         """ 
+        create new dictionnary from a list and a dictionnary
         returns param's dictionnary of function 
         """
 
-        argLen = len(args); kwargLen = len(kwargs)
+        # delete func key
+        try:
+            kwargs.pop("func")
+        except KeyError:
+            pass
+        
         if len(args) > len(kwargs):
             print("Zikbox Warning: too many parameters")
         # construct dictionnary compréhension
-        # {kwargs[k]=v for (k,v) in zip(kwargs.keys(), args)}
-        for (i, item) in enumerate(kwargs.keys()):
-            if i < argLen: 
-                kwargs[item] =  args[i]
-            else:
-                break
+        # Note: cannot using list comprehension to update dictionnary, 
+        # cause no assignments in list comprehension, cause assignment is statement in python.
+        for (k, v) in zip(kwargs.keys(), args):
+            kwargs[k] = v
+        if _TRACING:
+            self.trace(title="makeDicParams", **kwargs)
 
         return kwargs
+
+    #------------------------------------------------------------------------------
+
+    def checkMidiParams(self, *args, **kwargs):
+        isChan = lambda x: x.isdigit() and x >=0 and x <= 15
+        isMidiVal = lambda x: x.isdigit() and x >=0 and x <= 127
+        isBank = lambda x: x.isdigit() and x >=0 and x <= 16383
+        isDur = lambda x: isInstance(x, (int, float)) and x >0
+        isBpm = lambda x: isInstance(x, (int, float)) and x >0 and x <= 600
+        
+        funcLst = {
+                (chan,): isChan,
+                (note, key, vel, _prog, val, ctrl): isMidival,
+                (bank,): isBank,
+                (dur,): isDur,
+                (bpm,): isBpm,
+
+                }
+
+        for (key, val) in kwargs.items():
+            for item in funcDic.keys():
+                if key in item:
+                    print("here is key: ", key, "val: ", val)
+                    if not funcDic[item](val): return False
+            
+            """
+            if key == "chan":
+                if not isChan(val): return False
+            elif key in ("note", "key", "vel", "_prog", "val", "ctrl"):
+                if not isMidiVal(val): return False
+            elif key == "dur":
+                if not isdur(val): return False
+            elif key == "_bank":
+                if not isBank(val): return False
+            elif key == "bpm":
+                if not isBpm(val): return False
+                """
+      
+        return True
 
     #------------------------------------------------------------------------------
 
@@ -124,20 +180,22 @@ class Commands(object):
         """
         
         for (key, val) in kwargs.items():
-            if key in self._midiParamNames: 
-                if not utils.is_number(val): 
+            if key in self._midiParamLst: 
+                #if not utils.is_number(val):
+                # Note: tips for determine whether string is int, float or string
+                try:
+                    float(val)
+                except ValueError:
                     return {}
-                if isinstance(val, str) and val.isdigit():
+                
+                val = float(val)
+                if val.is_integer(): 
                     kwargs[key] = int(val)
-                elif isinstance(val, int):
-                    kwargs[key] = val
                 else:
-                    # whether is a float, remove the zero after the dot
-                    val = float(val)
-                    if utils.is_int(val):
-                        kwargs[key] = int(val)
-                    else:
-                        kwargs[key] = val
+                    kwargs[key] = val
+
+        if _TRACING:
+            self.trace(title="formatMidiParams", **kwargs)
 
         return kwargs
 
@@ -169,40 +227,71 @@ class Commands(object):
                     kwargs[key] = utils.limit_value(int(val), 0, 127)
         
         print("result: ", kwargs)
+        if _TRACING:
+            self.trace(title="limitMidiParams", **kwargs)
 
         return kwargs
     
     #------------------------------------------------------------------------------
 
-    def search(self, valStr):
-        print(f"Searching: ", valStr)
+    def parseString(self, valStr, *args):
+        global _TRACING
+
+        print(f"Parsing: ", valStr)
         
         kwargDic = {}
+        isGlob =1
         # Remove all spaces from string
-        argLst = valStr.lower().split()
+        if valStr:
+            argLst = valStr.lower().split()
+        else:
+            argLst = args
         if argLst:
             funcName = argLst.pop(0)
-            if funcName in self.cmdLst:
-                cmdFunc = self.cmdDic[funcName][0]
-                kwargFunc = self.cmdDic[funcName][1]
-                if kwargFunc:
-                    # kwargDic = {k:v for (k, v) in zip(kwargFunc.keys(), argLst)}
-                    kwargDic = self.makeDicParams(*argLst, **kwargFunc)
+            
+            if funcName in self.globComDic.keys():
+                kwargDic = self.globComDic[funcName]
+                cmdFunc = kwargDic["func"]
+            elif funcName in self._synthComDic.keys():
+                isGlob =0
+                kwargDic = self._synthComDic[funcName]
+                cmdFunc = kwargDic["func"]
+                if kwargDic:
+                    kwargDic = self.makeDicParams(*argLst, **kwargDic)
                 if kwargDic: 
                     kwargDic = self.formatMidiParams(**kwargDic)
                     if not kwargDic:
-                        print("Not check midi values")
+                        print("Error: Midi value not found")
                         return
-                    kwargDic = self.limitMidiParams(funcName, **kwargDic)
+                    else:
+                        kwargDic = self.limitMidiParams(funcName, **kwargDic)
                 
+            if _TRACING:
+                self.trace("parseString func", "", *argLst, **kwargDic)
+            elif isGlob:
+                if funcName == "trace":
+                    cmdFunc("parseString func", "", *argLst, **kwargDic)
+                else:
+                    cmdFunc(*argLst, **kwargDic)
+            else: # is not glob
                 cmdFunc(**kwargDic)
-            else:
-                print(f"{funcName}: Command not found.")
-
+        else: # is not arglst
+            print(f"{funcName}: Command not found.")
+        
+        _TRACING =0
     #------------------------------------------------------------------------------
     
     def help(self, *args, **kwargs):
         print("Help...")
+        # print(f"args: {args}\n kwargs: {kwargs}")
+        if args:
+            key = args[0]
+            try:
+                print(self._helpDic[key])
+            except KeyError:
+                print(f"{key}: no help for this keyword")
+        else:
+            print(self._helpDic["help"])
 
     #------------------------------------------------------------------------------
     
@@ -214,24 +303,42 @@ class Commands(object):
 
     #------------------------------------------------------------------------------
     
+    def trace(self, title="", msg="", *args, **kwargs):
+        global _TRACING
+        print("Trace...")
+        print(f"Title: {title}, msg: {msg}\n args: {args}, kwargs: {kwargs}")
+        if args and args[0] == "trace":
+            args = args.pop(0)
+            _TRACING =1
+            parseString(None, *args)
+
+    #------------------------------------------------------------------------------
+
+    def main(self):
+        # com = Commands()
+        self.init()
+
+        while 1:
+            valStr = _session.prompt("-> ")
+            # print(valStr)
+            if valStr.lstrip() != "":
+                self.parseString(valStr)
+            else:
+                print("No result")
+
+    #------------------------------------------------------------------------------
+
+    def test(self, *args, **kwargs):
+        print("Test!!!")
+        print("Results", args, kwargs, sep="\n")
+
+    #------------------------------------------------------------------------------
+    
+    
 #========================================
-
-def main():
-    com = Commands()
-    com.init()
-
-    while 1:
-        valStr = session.prompt("-> ")
-        # print(valStr)
-        if valStr.lstrip() != "":
-            com.search(valStr)
-        else:
-            print("No result")
-            # sys.exit(0)
-
-#------------------------------------------------------------------------------
 
 
 if __name__ == "__main__":
-    main()
+    app = Commands()
+    app.main()
 #------------------------------------------------------------------------------
