@@ -5,6 +5,7 @@
     Author: Coolbrother
 
 """
+import time
 import fluidsynth   
 
 class ModFluid(object):
@@ -21,7 +22,7 @@ class ModFluid(object):
         from ModFluid object
         """
 
-        self.fs = fluidsynth.Synth(gain=0.5)
+        self.fs = fluidsynth.Synth(gain=0.5, samplerate=44100)
         self.fs.start(driver=driver, device=device)
         self.sfid = self.fs.sfload(bank_file, update_midi_preset=0)
         # chan, sfid, bank, preset
@@ -33,9 +34,10 @@ class ModFluid(object):
     
     def close(self):
         """ close fluidsynth """
-        self.fs.sfunload(self.sfid, update_midi_preset=0)
-        self.fs.delete()
-        time.sleep(0.5)
+        if self.fs is not None:
+            self.fs.sfunload(self.sfid, update_midi_preset=0)
+            self.fs.delete()
+            time.sleep(0.5)
 
     #-----------------------------------------
 
@@ -82,8 +84,9 @@ class ModFluid(object):
         from FluidSynth manager
         """
 
-        self.fs.delete()
-        self.fs = None
+        if self.fs is not None:
+            self.fs.delete()
+            self.fs = None
 
     #-----------------------------------------
 

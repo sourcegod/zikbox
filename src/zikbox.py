@@ -19,7 +19,7 @@ import midiman
 
 # globals variables
 _driver = "alsa"
-_device = "hw:2"
+_device = "hw:1"
 _bank_file = "/home/com/banks/sf2/fluidr3_gm.sf2"
 
 id_octave =101
@@ -746,6 +746,7 @@ class MainApp(object):
         curses.use_default_colors()
         self.ypos =0; self.xpos =0
         self.height, self.width = self.stdscr.getmaxyx()
+        # initialize the main window
         self.win = curses.newwin(self.height, self.width, self.ypos, self.xpos)
         self.win.refresh()
         self.win.keypad(1) # allow to catch code of arrow keys and functions keys

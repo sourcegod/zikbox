@@ -4,6 +4,18 @@
     Author: Coolbrother
     Date: Thu, 12/08/2021
 """
+_DEBUG =1
+
+def debugMsg(title="", msg="", _type="Info"):
+    if _DEBUG:
+        if title: 
+            msg = f"{_type}: {msg}"
+        else:
+            msg = f"{_type}: {title}\n{msg}"
+        
+        print(msg)
+
+#-------------------------------------------
 
 def is_number(stg):
     """ Returns True is string is a number. """

@@ -2,18 +2,37 @@
 """
     Zikbox commands manager
 """
+import os
 import sys
 import midiman
 import utils
 from prompt_toolkit import prompt, PromptSession
 from prompt_toolkit.history import FileHistory
+from prompt_toolkit.completion import WordCompleter, PathCompleter
+
 from os.path import expanduser
+import curses
+import asyncio
+import threading
+import readln
 
 # globals variables
 _DEBUG =0
 _TRACING =0
 
 _session = PromptSession(history = FileHistory(expanduser('~/.synth_history')))
+_words_completer = WordCompleter(['prog', 'bank', 'note', 'noteon', 'noteoff', 'initmod', 'stopmod'])
+
+_words_dic = { 
+        'prog': ['_prog', '_chan'], 
+        'bank': ['_bank', '_chan'], 
+        'note': ['_key', '_vel', '_dur', '_chan'], 
+        'noteon': ['_key', '_vel', '_chan'],
+        'noteoff': ['_key', '_chan'],
+        'demo': ['_prog', '_chan'],
+        'initmod': ['_driv', '_dev', '_file'],
+        'stopmod': [],
+    }
 
 class Commands(object):
     def __init__(self, *args, **kwargs):
@@ -64,11 +83,13 @@ class Commands(object):
                 "q": {"func": self.quit, },
                 "test": {"func": self.test, "_prog": 33, "chan": 1, },
                 "trace": {"func": self.trace, },
+                # "midport": {"func": self.midman.midport, "in": None, "out": None, "con": None, },
                 
                 }
 
        
         
+        # """
         self._synthComDic = {
                 "prog": {"func": self.midman.prog, **self._progDic}, 
                 "bank": {"func": self.midman.bank, **self._bankDic},
@@ -83,10 +104,12 @@ class Commands(object):
                 "load": {"func": self.midman.load, "bankFile": None, "chan": 1, },
                 "unload": {"func": self.midman.unload, },
                 "demo": {"func": self.midman.demo, "_prog": 16, "chan": 1},
-                "startsys": {"func": self.midman.startsys, "driver": None, "device": None, "bank_file": None, },
-                "stopsys": {"func": self.midman.stopsys, },
+                "initmod": {"func": self.midman.initmod, "driver": None, "device": None, "bank_file": None, },
+                "stopmod": {"func": self.midman.stopmod, },
                 
                 }
+        # """
+
         
         self._midiFuncLst = ["prog", "bank", "cc",
                 "noteon", "noteoff", "note", 
@@ -96,10 +119,12 @@ class Commands(object):
 
     #------------------------------------------------------------------------------
     
-    def init(self):   
+    def initApp(self):   
         # self.midman = midiman.MidiManager()
+        # self.midman.parent = self
         self.midman.init(driver=None, device=None, bank_file=None)
-        self.midman.receive_from(port=1, callback=self.midman.input_callback)
+        self.midman.receive_from(port=1)
+        # st.s
 
     #------------------------------------------------------------------------------
     
@@ -107,6 +132,46 @@ class Commands(object):
         self.midman.close()
 
     #------------------------------------------------------------------------------
+    
+    def mainWin(self):
+        self.stdscr = curses.initscr()
+        curses.noecho() # don't repeat key hit at the screen
+        # curses.cbreak()
+        # curses.raw() # for no interrupt mode like suspend, quit
+        curses.start_color()
+        curses.use_default_colors()
+        self.ypos =0; self.xpos =0
+        self.height, self.width = self.stdscr.getmaxyx()
+        # initialize the main window
+        self.win = curses.newwin(self.height, self.width, self.ypos, self.xpos)
+        self.win.refresh()
+        self.win.keypad(1) # allow to catch code of arrow keys and functions keys
+        # self.win.nodelay(1)
+    #------------------------------------------------------------------------------
+    
+    def main2(self):
+        self.mainWin()
+        self.initApp()
+        self.keyHandler()
+
+    #-------------------------------------------
+
+    def keyHandler(self):
+        msg = "Grovit Synth..."
+        self.display(msg)
+        curses.beep() # to test the nodelay function
+        while 1:
+            key = self.win.getch()
+            if key >= 32 and key < 128:
+                key = chr(key)
+            if key == 'Q':
+                self.close()
+                self.win.close()
+                break
+        pass
+
+    #-------------------------------------------
+
 
     def makeDicParams(self, *args, **kwargs):
         """ 
@@ -206,7 +271,7 @@ class Commands(object):
         # Warn: just for fun
         # limVal = lambda x, minVal=0, maxVal=127: minVal if x < minVal else maxVal if x > maxVal else x
         
-        print(f"name: {funcName}")
+        # print(f"name: {funcName}")
         if funcName in self._midiFuncLst:
             for (key, val) in kwargs.items():
                 # print(f"{key}: {val}")
@@ -223,10 +288,17 @@ class Commands(object):
                     val = utils.limit_value(int(val), 0, 16)
                     if val >0: val -=1
                     kwargs[key] = val 
+                elif key == "_bank":
+                    val = utils.limit_value(int(val), 0, 16384)
+                    kwargs[key] = val 
+                elif key == "bankFile":
+                    val = str(val)
+                    kwargs[key] = val 
                 else:
                     kwargs[key] = utils.limit_value(int(val), 0, 127)
         
-        print("result: ", kwargs)
+        # debugging
+        # print("result: ", kwargs)
         if _TRACING:
             self.trace(title="limitMidiParams", **kwargs)
 
@@ -237,9 +309,11 @@ class Commands(object):
     def parseString(self, valStr, *args):
         global _TRACING
 
-        print(f"Parsing: ", valStr)
+        # print(f"Parsing: ", valStr)
         
         kwargDic = {}
+        cmdFunc = None
+        funcName = ""
         isGlob =1
         # Remove all spaces from string
         if valStr:
@@ -261,22 +335,26 @@ class Commands(object):
                 if kwargDic: 
                     kwargDic = self.formatMidiParams(**kwargDic)
                     if not kwargDic:
-                        print("Error: Midi value not found")
+                        self.display(title="Error", msg="Midi value not found")
                         return
                     else:
                         kwargDic = self.limitMidiParams(funcName, **kwargDic)
                 
+            else: # no funcname
+                self.display(f"{funcName}: Command not found.")
+                return
+
             if _TRACING:
                 self.trace("parseString func", "", *argLst, **kwargDic)
-            elif isGlob:
+            elif cmdFunc and isGlob:
                 if funcName == "trace":
                     cmdFunc("parseString func", "", *argLst, **kwargDic)
-                else:
+                elif cmdFunc:
                     cmdFunc(*argLst, **kwargDic)
             else: # is not glob
                 cmdFunc(**kwargDic)
         else: # is not arglst
-            print(f"{funcName}: Command not found.")
+            self.display(f"{funcName}: Command not found.")
         
         _TRACING =0
     #------------------------------------------------------------------------------
@@ -314,31 +392,72 @@ class Commands(object):
 
     #------------------------------------------------------------------------------
 
-    def main(self):
+    async def asMain(self):
         # com = Commands()
-        self.init()
+        self.initApp()
 
-        while 1:
-            valStr = _session.prompt("-> ")
-            # print(valStr)
-            if valStr.lstrip() != "":
-                self.parseString(valStr)
-            else:
-                print("No result")
+        _session = PromptSession()
+        while True:
+            with patch_stdout():
+                valStr = await _session.prompt_async("-> ", completer=_words_completer)
+                # print(valStr)
+                if valStr.lstrip() != "":
+                    self.parseString(valStr)
+                else:
+                    # print("No result")
+                    pass
 
     #------------------------------------------------------------------------------
 
+    def display(self, msg="", title="[Ret]"):
+        if title: 
+            msg = f"{title}: {msg}"
+        print(msg)
+    
+    #-------------------------------------------
+
+   
+    def main(self):
+        # com = Commands()
+        self.initApp()
+        # Register our completer function
+        readln.set_completer(_words_dic)
+        readln.read_historyfile()
+        try:
+            while True:
+                # valStr = _session.prompt("-> ", completer=_words_completer)
+                # valStr = _session.prompt("-> ", completer=_path_completer)
+                
+                valStr = readln.get_input("-> ")
+                # valStr = _session.prompt("-> ")
+                # print(valStr)
+                if valStr.lstrip() != "":
+                    # print(f"Adding {valStr} to the history")
+                    self.parseString(valStr)
+                else:
+                    print("No result")
+                    pass
+
+        finally:
+            # print('Final history:', get_history_items())
+            readln.write_historyfile()
+
+    #------------------------------------------------------------------------------
+
+
     def test(self, *args, **kwargs):
         print("Test!!!")
-        print("Results", args, kwargs, sep="\n")
+        # print("Results", args, kwargs, sep="\n")
+        self.midman.print_ports()
 
     #------------------------------------------------------------------------------
     
     
 #========================================
 
-
 if __name__ == "__main__":
-    app = Commands()
-    app.main()
+    com = Commands()
+    # app.main2()
+    com.main()
+
 #------------------------------------------------------------------------------
