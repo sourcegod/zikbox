@@ -6,22 +6,13 @@ import os
 import sys
 import midiman
 import utils
-from prompt_toolkit import prompt, PromptSession
-from prompt_toolkit.history import FileHistory
-from prompt_toolkit.completion import WordCompleter, PathCompleter
-
-from os.path import expanduser
 import curses
-import asyncio
 import threading
 import readln
 
 # globals variables
 _DEBUG =0
 _TRACING =0
-
-_session = PromptSession(history = FileHistory(expanduser('~/.synth_history')))
-_words_completer = WordCompleter(['prog', 'bank', 'note', 'noteon', 'noteoff', 'initmod', 'stopmod'])
 
 _words_dic = { 
         'prog': ['_prog', '_chan'], 
@@ -392,23 +383,6 @@ class Commands(object):
 
     #------------------------------------------------------------------------------
 
-    async def asMain(self):
-        # com = Commands()
-        self.initApp()
-
-        _session = PromptSession()
-        while True:
-            with patch_stdout():
-                valStr = await _session.prompt_async("-> ", completer=_words_completer)
-                # print(valStr)
-                if valStr.lstrip() != "":
-                    self.parseString(valStr)
-                else:
-                    # print("No result")
-                    pass
-
-    #------------------------------------------------------------------------------
-
     def display(self, msg="", title="[Ret]"):
         if title: 
             msg = f"{title}: {msg}"
@@ -425,12 +399,8 @@ class Commands(object):
         readln.read_historyfile()
         try:
             while True:
-                # valStr = _session.prompt("-> ", completer=_words_completer)
-                # valStr = _session.prompt("-> ", completer=_path_completer)
-                
+               
                 valStr = readln.get_input("-> ")
-                # valStr = _session.prompt("-> ")
-                # print(valStr)
                 if valStr.lstrip() != "":
                     # print(f"Adding {valStr} to the history")
                     self.parseString(valStr)
